@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::Toasts;
 use bevy::prelude::*;
-use bevy_egui::EguiContext;
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 use egui::FontId;
 
 const DEFAULT_TOAST_FONT_SIZE: f32 = 25.0;
@@ -34,17 +34,14 @@ impl Default for EguiToastsPlugin {
 
 impl Plugin for EguiToastsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(EguiToasts(
-            self.builder
-                .map(|f| f())
-                .unwrap_or_default(),
-        ))
-        .add_systems(Update, update_toasts);
+        app.insert_resource(EguiToasts(self.builder.map(|f| f()).unwrap_or_default()))
+            .add_systems(EguiPrimaryContextPass, update_toasts);
     }
 }
 
-fn update_toasts(mut toasts: ResMut<EguiToasts>, mut ctx: Query<&mut EguiContext>) {
-    toasts.0.show(ctx.single_mut().get_mut());
+fn update_toasts(mut toasts: ResMut<EguiToasts>, mut ctx: EguiContexts) -> Result {
+    toasts.0.show(ctx.ctx_mut()?);
+    Ok(())
 }
 
 /// Show a toast with the given message, in an error state.
@@ -55,7 +52,7 @@ where
     let toasts = &mut toasts.into_inner().0;
     if let Err(err) = result {
         toasts
-            .error(format!("{}", err))
+            .error(format!("{err}"))
             .duration(Some(Duration::from_secs(10)));
     }
 }

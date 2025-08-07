@@ -15,7 +15,7 @@ pub use anchor::*;
 #[doc(hidden)]
 pub use egui::__run_test_ctx;
 use egui::{
-    vec2, Color32, Context, FontId, Id, LayerId, Order, Rect, Rounding, Shadow, Stroke, Vec2,
+    vec2, Color32, Context, CornerRadius, FontId, Id, LayerId, Order, Rect, Shadow, Stroke, Vec2,
 };
 
 pub(crate) const TOAST_WIDTH: f32 = 180.;
@@ -233,7 +233,7 @@ impl Toasts {
             if let Some((_, d)) = toast.duration.as_mut() {
                 // Check if we hover over the toast and if true don't decrease the duration
                 let hover_pos = ctx.input(|i| i.pointer.hover_pos());
-                let is_outside_rect = hover_pos.map_or(true, |pos| !rect.contains(pos));
+                let is_outside_rect = hover_pos.is_none_or(|pos| !rect.contains(pos));
 
                 if is_outside_rect && toast.state.idling() {
                     *d -= ctx.input(|i| i.stable_dt);
@@ -264,7 +264,7 @@ impl Toasts {
 
             let line_count = toast.caption.chars().filter(|c| *c == '\n').count() + 1;
             let icon_width = caption_height / line_count as f32;
-            let rounding = Rounding::same(4.);
+            let rounding = CornerRadius::same(4);
 
             // Create toast icon
             let icon_font = FontId::proportional(icon_width);
