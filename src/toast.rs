@@ -1,7 +1,7 @@
 use bevy_egui::egui;
 
 use crate::{Anchor, TOAST_HEIGHT, TOAST_WIDTH};
-use egui::{pos2, vec2, FontId, Pos2, Rect};
+use egui::{pos2, vec2, Color32, Pos2, Rect, WidgetText};
 use std::{fmt::Debug, time::Duration};
 
 /// Level of importance
@@ -14,7 +14,7 @@ pub enum ToastLevel {
     Error,
     Success,
     None,
-    Custom(String, egui::Color32),
+    Custom(String, Color32),
 }
 
 #[derive(Debug)]
@@ -61,11 +61,9 @@ pub struct ToastOptions {
 }
 
 /// Single notification or *toast*
-#[derive(Debug)]
 pub struct Toast {
     pub(crate) level: ToastLevel,
-    pub(crate) caption: String,
-    pub(crate) font: Option<FontId>,
+    pub(crate) caption: WidgetText,
     // (initial, current)
     pub(crate) duration: Option<(f32, f32)>,
     pub(crate) height: f32,
@@ -93,7 +91,7 @@ fn duration_to_seconds_f32(duration: Duration) -> f32 {
 }
 
 impl Toast {
-    fn new(caption: impl Into<String>, options: ToastOptions) -> Self {
+    fn new(caption: impl Into<WidgetText>, options: ToastOptions) -> Self {
         Self {
             caption: caption.into(),
             height: TOAST_HEIGHT,
@@ -105,20 +103,18 @@ impl Toast {
             closable: options.closable,
             show_progress_bar: options.show_progress_bar,
             level: options.level,
-
             value: 0.,
             state: ToastState::Appear,
-            font: None,
         }
     }
 
     /// Creates new basic toast, can be closed by default.
-    pub fn basic(caption: impl Into<String>) -> Self {
+    pub fn basic(caption: impl Into<WidgetText>) -> Self {
         Self::new(caption, ToastOptions::default())
     }
 
     /// Creates new success toast, can be closed by default.
-    pub fn success(caption: impl Into<String>) -> Self {
+    pub fn success(caption: impl Into<WidgetText>) -> Self {
         Self::new(
             caption,
             ToastOptions {
@@ -129,7 +125,7 @@ impl Toast {
     }
 
     /// Creates new info toast, can be closed by default.
-    pub fn info(caption: impl Into<String>) -> Self {
+    pub fn info(caption: impl Into<WidgetText>) -> Self {
         Self::new(
             caption,
             ToastOptions {
@@ -140,7 +136,7 @@ impl Toast {
     }
 
     /// Creates new warning toast, can be closed by default.
-    pub fn warning(caption: impl Into<String>) -> Self {
+    pub fn warning(caption: impl Into<WidgetText>) -> Self {
         Self::new(
             caption,
             ToastOptions {
@@ -151,7 +147,7 @@ impl Toast {
     }
 
     /// Creates new error toast, can not be closed by default.
-    pub fn error(caption: impl Into<String>) -> Self {
+    pub fn error(caption: impl Into<WidgetText>) -> Self {
         Self::new(
             caption,
             ToastOptions {
@@ -163,7 +159,7 @@ impl Toast {
     }
 
     /// Creates new custom toast, can be closed by default.
-    pub fn custom(caption: impl Into<String>, level: ToastLevel) -> Self {
+    pub fn custom(caption: impl Into<WidgetText>, level: ToastLevel) -> Self {
         Self::new(
             caption,
             ToastOptions {
@@ -187,13 +183,6 @@ impl Toast {
         self
     }
 
-    /// Changes the font used to draw the caption, it takes precedence over the value from
-    /// [`Toasts`].
-    pub fn font(&mut self, font: FontId) -> &mut Self {
-        self.font = Some(font);
-        self
-    }
-
     /// Can the user close the toast?
     pub fn closable(&mut self, closable: bool) -> &mut Self {
         self.closable = closable;
@@ -207,8 +196,8 @@ impl Toast {
     }
 
     /// In what time should the toast expire? Set to `None` for no expiry.
-    pub fn duration(&mut self, duration: Option<Duration>) -> &mut Self {
-        if let Some(duration) = duration {
+    pub fn duration(&mut self, duration: impl Into<Option<Duration>>) -> &mut Self {
+        if let Some(duration) = duration.into() {
             let max_dur = duration_to_seconds_f32(duration);
             self.duration = Some((max_dur, max_dur));
         } else {

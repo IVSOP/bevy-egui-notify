@@ -1,4 +1,3 @@
-//! egui-notify
 //! Simple notifications library for egui.
 
 #![warn(missing_docs)]
@@ -14,8 +13,10 @@ pub use anchor::*;
 
 #[doc(hidden)]
 pub use egui::__run_test_ctx;
+use egui::text::TextWrapping;
 use egui::{
-    vec2, Color32, Context, CornerRadius, FontId, Id, LayerId, Order, Rect, Shadow, Stroke, Vec2,
+    vec2, Align, Color32, Context, CornerRadius, FontId, FontSelection, Id, LayerId, Order, Rect,
+    Shadow, Stroke, TextWrapMode, Vec2, WidgetText,
 };
 
 pub(crate) const TOAST_WIDTH: f32 = 180.;
@@ -105,35 +106,45 @@ impl Toasts {
         }
     }
 
+    /// Returns the number of toast items.
+    pub fn len(&self) -> usize {
+        self.toasts.len()
+    }
+
+    /// Returns `true` if there are no toast items.
+    pub fn is_empty(&self) -> bool {
+        self.toasts.is_empty()
+    }
+
     /// Shortcut for adding a toast with info `success`.
-    pub fn success(&mut self, caption: impl Into<String>) -> &mut Toast {
+    pub fn success(&mut self, caption: impl Into<WidgetText>) -> &mut Toast {
         self.add(Toast::success(caption))
     }
 
     /// Shortcut for adding a toast with info `level`.
-    pub fn info(&mut self, caption: impl Into<String>) -> &mut Toast {
+    pub fn info(&mut self, caption: impl Into<WidgetText>) -> &mut Toast {
         self.add(Toast::info(caption))
     }
 
     /// Shortcut for adding a toast with warning `level`.
-    pub fn warning(&mut self, caption: impl Into<String>) -> &mut Toast {
+    pub fn warning(&mut self, caption: impl Into<WidgetText>) -> &mut Toast {
         self.add(Toast::warning(caption))
     }
 
     /// Shortcut for adding a toast with error `level`.
-    pub fn error(&mut self, caption: impl Into<String>) -> &mut Toast {
+    pub fn error(&mut self, caption: impl Into<WidgetText>) -> &mut Toast {
         self.add(Toast::error(caption))
     }
 
     /// Shortcut for adding a toast with no level.
-    pub fn basic(&mut self, caption: impl Into<String>) -> &mut Toast {
+    pub fn basic(&mut self, caption: impl Into<WidgetText>) -> &mut Toast {
         self.add(Toast::basic(caption))
     }
 
     /// Shortcut for adding a toast with custom `level`.
     pub fn custom(
         &mut self,
-        caption: impl Into<String>,
+        caption: impl Into<WidgetText>,
         level_string: String,
         level_color: egui::Color32,
     ) -> &mut Toast {
@@ -200,22 +211,8 @@ impl Toasts {
             ..
         } = self;
 
-        let mut pos = anchor.screen_corner(ctx.input(|i| i.screen_rect.max), *margin);
+        let mut pos = anchor.screen_corner(ctx.input(|i| i.content_rect().max), *margin);
         let p = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("toasts")));
-
-        let mut dismiss = None;
-
-        // Remove disappeared toasts
-        toasts.retain(|t| !t.state.disappeared());
-
-        // Start disappearing expired toasts
-        for t in toasts.iter_mut() {
-            if let Some((_initial_d, current_d)) = t.duration {
-                if current_d <= 0. {
-                    t.state = ToastState::Disappear;
-                }
-            }
-        }
 
         // `held` used to prevent sticky removal
         if ctx.input(|i| i.pointer.primary_released()) {
@@ -225,7 +222,14 @@ impl Toasts {
         let visuals = ctx.style().visuals.widgets.noninteractive;
         let mut update = false;
 
-        for (i, toast) in toasts.iter_mut().enumerate() {
+        toasts.retain_mut(|toast| {
+            // Start disappearing expired toasts
+            if let Some((_initial_d, current_d)) = toast.duration {
+                if current_d <= 0. {
+                    toast.state = ToastState::Disappear;
+                }
+            }
+
             let anim_offset = toast.width * (1. - ease_in_cubic(toast.value));
             pos.x += anim_offset * anchor.anim_side();
             let rect = toast.calc_anchored_rect(pos, *anchor);
@@ -241,51 +245,44 @@ impl Toasts {
                 }
             }
 
-            let caption_font = toast
-                .font
-                .as_ref()
-                .or(self.font.as_ref())
-                .or(ctx.style().override_font_id.as_ref())
-                .cloned()
-                .unwrap_or_else(|| FontId::proportional(16.));
-
-            // Create toast label
-            let caption_galley = ctx.fonts(|f| {
-                f.layout(
-                    toast.caption.clone(),
-                    caption_font,
-                    visuals.fg_stroke.color,
-                    f32::INFINITY,
-                )
-            });
+            let caption_galley = toast.caption.clone().into_galley_impl(
+                ctx,
+                ctx.style().as_ref(),
+                TextWrapping::from_wrap_mode_and_width(TextWrapMode::Extend, f32::INFINITY),
+                FontSelection::Default,
+                Align::LEFT,
+            );
 
             let (caption_width, caption_height) =
                 (caption_galley.rect.width(), caption_galley.rect.height());
 
-            let line_count = toast.caption.chars().filter(|c| *c == '\n').count() + 1;
+            let line_count = toast.caption.text().chars().filter(|c| *c == '\n').count() + 1;
             let icon_width = caption_height / line_count as f32;
             let rounding = CornerRadius::same(4);
 
             // Create toast icon
             let icon_font = FontId::proportional(icon_width);
-            let icon_galley = match &toast.level {
-                ToastLevel::Info => {
-                    Some(ctx.fonts(|f| f.layout("ℹ".into(), icon_font, INFO_COLOR, f32::INFINITY)))
-                }
-                ToastLevel::Warning => Some(
-                    ctx.fonts(|f| f.layout("⚠".into(), icon_font, WARNING_COLOR, f32::INFINITY)),
-                ),
-                ToastLevel::Error => Some(
-                    ctx.fonts(|f| f.layout("！".into(), icon_font, ERROR_COLOR, f32::INFINITY)),
-                ),
-                ToastLevel::Success => Some(
-                    ctx.fonts(|f| f.layout("✅".into(), icon_font, SUCCESS_COLOR, f32::INFINITY)),
-                ),
-                ToastLevel::Custom(s, c) => {
-                    Some(ctx.fonts(|f| f.layout(s.clone(), icon_font, *c, f32::INFINITY)))
-                }
-                ToastLevel::None => None,
-            };
+            let icon_galley =
+                match &toast.level {
+                    ToastLevel::Info => {
+                        Some(ctx.fonts_mut(|f| {
+                            f.layout("ℹ".into(), icon_font, INFO_COLOR, f32::INFINITY)
+                        }))
+                    }
+                    ToastLevel::Warning => Some(ctx.fonts_mut(|f| {
+                        f.layout("⚠".into(), icon_font, WARNING_COLOR, f32::INFINITY)
+                    })),
+                    ToastLevel::Error => Some(ctx.fonts_mut(|f| {
+                        f.layout("！".into(), icon_font, ERROR_COLOR, f32::INFINITY)
+                    })),
+                    ToastLevel::Success => Some(ctx.fonts_mut(|f| {
+                        f.layout("✅".into(), icon_font, SUCCESS_COLOR, f32::INFINITY)
+                    })),
+                    ToastLevel::Custom(s, c) => {
+                        Some(ctx.fonts_mut(|f| f.layout(s.clone(), icon_font, *c, f32::INFINITY)))
+                    }
+                    ToastLevel::None => None,
+                };
 
             let (action_width, action_height) =
                 icon_galley.as_ref().map_or((0., 0.), |icon_galley| {
@@ -295,7 +292,7 @@ impl Toasts {
             // Create closing cross
             let cross_galley = if toast.closable {
                 let cross_fid = FontId::proportional(icon_width);
-                let cross_galley = ctx.fonts(|f| {
+                let cross_galley = ctx.fonts_mut(|f| {
                     f.layout(
                         "❌".into(),
                         cross_fid,
@@ -352,7 +349,11 @@ impl Toasts {
             {
                 let oy = toast.height / 2. - action_height / 2.;
                 let ox = padding.x + icon_x_padding.0;
-                p.galley(rect.min + vec2(ox, oy), icon_galley, Color32::BLACK);
+                p.galley(
+                    rect.min + vec2(ox, oy),
+                    icon_galley,
+                    visuals.fg_stroke.color,
+                );
             }
 
             // Paint caption
@@ -368,7 +369,11 @@ impl Toasts {
                 cross_width + cross_x_padding.0
             };
             let ox = (toast.width / 2. - caption_width / 2.) + o_from_icon / 2. - o_from_cross / 2.;
-            p.galley(rect.min + vec2(ox, oy), caption_galley, Color32::BLACK);
+            p.galley(
+                rect.min + vec2(ox, oy),
+                caption_galley,
+                visuals.fg_stroke.color,
+            );
 
             // Paint cross
             if let Some(cross_galley) = cross_galley {
@@ -385,7 +390,7 @@ impl Toasts {
 
                 if let Some(pos) = ctx.input(|i| i.pointer.press_origin()) {
                     if screen_cross.contains(pos) && !*held {
-                        dismiss = Some(i);
+                        toast.dismiss();
                         *held = true;
                     }
                 }
@@ -425,14 +430,13 @@ impl Toasts {
                     toast.state = ToastState::Disappeared;
                 }
             }
-        }
+
+            // Remove disappeared toasts
+            !toast.state.disappeared()
+        });
 
         if update {
             ctx.request_repaint();
-        }
-
-        if let Some(i) = dismiss {
-            self.toasts[i].dismiss();
         }
     }
 }

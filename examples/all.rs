@@ -3,7 +3,7 @@ use eframe::{
     egui::{Context, Slider, Window},
     App, Frame, NativeOptions,
 };
-use egui::{Color32, FontId, Shadow, Style, Visuals};
+use egui::{Color32, Shadow, Style, Visuals};
 use egui_notify::{Toast, Toasts};
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ struct ExampleApp {
     font_size: f32,
     dark: bool,
     custom_level_string: String,
-    custom_level_color: egui::Color32,
+    custom_level_color: Color32,
     shadow: bool,
 }
 
@@ -32,8 +32,8 @@ impl App for ExampleApp {
                 self.toasts = if self.shadow {
                     Toasts::default().with_shadow(Shadow {
                         offset: Default::default(),
-                        blur: 30.0,
-                        spread: 5.0,
+                        blur: 30,
+                        spread: 5,
                         color: Color32::from_black_alpha(70),
                     })
                 } else {
@@ -62,10 +62,10 @@ impl App for ExampleApp {
                 } else {
                     None
                 };
+
                 t.closable(self.closable)
                     .duration(duration)
-                    .show_progress_bar(self.show_progress_bar)
-                    .font(FontId::proportional(self.font_size));
+                    .show_progress_bar(self.show_progress_bar);
             };
 
             ui.horizontal(|ui| {
@@ -87,6 +87,19 @@ impl App for ExampleApp {
 
                 if ui.button("Basic").clicked() {
                     customize_toast(self.toasts.basic(self.caption.clone()));
+                }
+
+                if ui.button("Rich text").clicked() {
+                    customize_toast(
+                        self.toasts.success(
+                            egui::RichText::new(self.caption.clone())
+                                .color(Color32::GREEN)
+                                .background_color(Color32::DARK_GRAY)
+                                .size(self.font_size)
+                                .italics()
+                                .underline(),
+                        ),
+                    );
                 }
 
                 if ui.button("Custom").clicked() {
@@ -150,9 +163,9 @@ fn main() -> eframe::Result<()> {
 
             let mut font_def = FontDefinitions::default();
             egui_phosphor::add_to_fonts(&mut font_def, egui_phosphor::Variant::Regular);
-            for data in font_def.font_data.values_mut() {
-                data.tweak.scale = 1.25;
-            }
+            // for data in font_def.font_data.values_mut() {
+            //     data.tweak.scale = 1.25;
+            // }
             cc.egui_ctx.set_fonts(font_def);
 
             Ok(Box::new(ExampleApp {
